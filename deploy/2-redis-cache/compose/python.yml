@@ -1,0 +1,30 @@
+# Rec-service: Python (FastAPI + asyncpg + Redis-кэш, пул 10)
+# Итерация 2, §2.5.
+
+services:
+  rec-service:
+    build: ../../../services/2-redis-cache/python
+    image: rec-service-py-iter2
+    env_file: ../.env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "${PORT_REC}:8000"
+    cap_add:
+      - SYS_PTRACE       # для py-spy (§3.1.7)
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: "${REC_CPUS}"
+          memory: ${REC_MEMORY}

@@ -1,0 +1,11 @@
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_ratings_user_id on ratings  (cost=0.44..28.95 rows=829 width=16) (actual time=0.099..0.110 rows=61 loops=1)
+   Index Cond: (user_id = 100)
+   Buffers: shared hit=5 read=2
+ Planning:
+   Buffers: shared hit=88 read=10
+ Planning Time: 0.623 ms
+ Execution Time: 0.210 ms
+(7 rows)
+

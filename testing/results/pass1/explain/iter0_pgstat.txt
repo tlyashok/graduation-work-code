@@ -1,0 +1,14 @@
+ total_ms  |  calls  | mean_ms  | pct  |                                           query                                            
+-----------+---------+----------+------+--------------------------------------------------------------------------------------------
+ 2800050.0 |    1142 | 2451.883 | 50.8 | SELECT movie_id, rating FROM ratings WHERE user_id = $1
+ 2411755.6 |  282470 |    8.538 | 43.8 | SELECT movie_id, rating FROM ratings WHERE user_id = $1
+  143565.6 |  180037 |    0.797 |  2.6 | SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count > $2 ORDER BY avg_ratin
+   63314.0 |     789 |   80.246 |  1.1 | SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count > $1 ORDER BY avg_ratin
+   57798.4 | 1087182 |    0.053 |  1.0 | SELECT movie_id, title FROM movies WHERE movie_id = ANY($1)
+   12777.1 |       7 | 1825.297 |  0.2 | CREATE INDEX IF NOT EXISTS idx_ratings_user_id ON ratings(user_id)
+    6421.2 |      12 |  535.099 |  0.1 | SELECT movie_id, similar_movie_id, similarity FROM item_similarity ORDER BY movie_id, simi
+    5652.5 |   73472 |    0.077 |  0.1 | SELECT movie_id, title FROM movies WHERE movie_id = ANY($1::int[])
+    1786.6 |    2349 |    0.761 |  0.0 | SELECT movie_id, title FROM movies WHERE movie_id = ANY(ARRAY[$1,$2,$3,$4,$5,$6])
+    1405.5 |       3 |  468.485 |  0.0 | EXPLAIN (ANALYZE, BUFFERS) SELECT movie_id, rating FROM ratings WHERE user_id = $1
+(10 rows)
+

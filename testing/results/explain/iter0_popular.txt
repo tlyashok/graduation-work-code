@@ -1,0 +1,23 @@
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5260.03..5269.34 rows=81 width=43) (actual time=13.038..15.457 rows=81 loops=1)
+   Buffers: shared hit=2216
+   ->  Gather Merge  (cost=5260.03..9251.91 rows=34712 width=43) (actual time=13.037..15.448 rows=81 loops=1)
+         Workers Planned: 1
+         Workers Launched: 1
+         Buffers: shared hit=2216
+         ->  Sort  (cost=4260.02..4346.80 rows=34712 width=43) (actual time=10.653..10.661 rows=80 loops=2)
+               Sort Key: ((avg_rating * ln(((ratings_count + 1))::double precision))) DESC
+               Sort Method: top-N heapsort  Memory: 36kB
+               Buffers: shared hit=2216
+               Worker 0:  Sort Method: top-N heapsort  Memory: 36kB
+               ->  Parallel Seq Scan on movies  (cost=0.00..2986.11 rows=34712 width=43) (actual time=0.100..6.395 rows=29524 loops=2)
+                     Filter: (ratings_count > 0)
+                     Rows Removed by Filter: 1688
+                     Buffers: shared hit=2180
+ Planning:
+   Buffers: shared hit=129 read=9
+ Planning Time: 0.768 ms
+ Execution Time: 15.524 ms
+(19 rows)
+

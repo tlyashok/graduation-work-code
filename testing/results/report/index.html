@@ -1,0 +1,187 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Сравнительный анализ производительности: Python и Go</title><style>
+body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;max-width:1100px;margin:0 auto;padding:24px;color:#222;line-height:1.5}
+h1{border-bottom:3px solid #00ADD8;padding-bottom:8px}
+h2{margin-top:40px;border-bottom:1px solid #ddd;padding-bottom:6px}
+h3{margin-top:26px;color:#333}
+table{border-collapse:collapse;margin:14px 0;width:100%}
+th,td{border:1px solid #ccc;padding:6px 10px;text-align:right}
+th{background:#f0f6fb}.qcell{text-align:left}
+.lang-py{color:#3572A5;font-weight:bold}.lang-go{color:#00ADD8;font-weight:bold}
+.note{background:#f8f8f8;border-left:4px solid #00ADD8;padding:10px 14px;margin:14px 0;font-size:.95em}
+.flames{display:flex;gap:12px;flex-wrap:wrap}.flames>div{flex:1;min-width:380px}
+.flamebox{width:100%;max-height:640px;overflow:auto;border:1px solid #ddd;margin:6px 0;background:#fff}
+h4{margin:18px 0 4px;color:#555}
+img{max-width:100%;border:1px solid #eee}
+details{margin:10px 0}summary{cursor:pointer;color:#0366d6}
+pre{background:#f6f8fa;padding:10px;overflow:auto;font-size:.8em;border-radius:4px}
+.hi{background:#fff3cd}
+</style></head><body>
+<h1>Сравнительный анализ производительности REST API рекомендательного сервиса: Python и Go</h1>
+<p class="note">Экспериментальные измерения проведены на выделенном облачном стенде (Timeweb Cloud: 12 виртуальных ядер vCPU с разделением времени, 23 ГБ RAM, Ubuntu 24.04). Каждая конфигурация исследована в рамках четырех независимых запусков; итоговые показатели представляют собой медианные значения. Сбор метрик интенсивности запросов (RPS) и доли ошибок осуществляет генератор нагрузки k6 с экспортом в Prometheus. Процентили времени отклика вычисляются на основе серверной гистограммы. Потребление ресурсов процессора и оперативной памяти как для всей виртуальной машины, так и для отдельных изолированных контейнеров (включая показатели процессорного времени вытеснения — CPU Steal Time), регистрируется системными агентами node-exporter и cAdvisor.</p>
+<h2>1. Основные результаты: предельная ёмкость</h2>
+<p>Предельная ёмкость — максимальная интенсивность запросов (запросов в секунду, RPS), которую веб-сервис способен стабильно обрабатывать при соблюдении заданных требований к качеству обслуживания (SLO: 95-й процентиль времени отклика — менее 500 мс, 99-й процентиль — менее 1000 мс, доля ошибок — менее 1 %; подробное описание приведено в разделе 4). Каждая величина в таблице является медианой результатов четырех запусков, а в столбцах диапазона указаны минимальное и максимальное значения, зафиксированные в ходе экспериментов.</p>
+<img src="assets/capacity.png" alt="Столбчатая диаграмма производительности">
+<table><tr><th>Конфигурация</th><th>Python,<br>запр./с (RPS)</th><th>Go,<br>запр./с (RPS)</th><th>Соотношение<br>Go / Python</th><th>Диапазон<br>(Python)</th><th>Диапазон<br>(Go)</th></tr>
+<tr><td>Итерация 0*<br>(базовое решение)</td><td class="lang-py">~4</td><td class="lang-go">~6</td><td>~1,5&times;</td><td colspan="2" class="qcell">предельная пропускная способность до сбоя; доля ошибок: Python ~65%, Go ~20%</td></tr>
+<tr><td>Итерация 1</td><td class='lang-py'>220</td><td class='lang-go'>1780</td><td>8,1&times;</td><td>177–236</td><td>1561–2027</td></tr>
+<tr><td>Итерация 2а (время жизни кэша 60 с)</td><td class='lang-py'>217</td><td class='lang-go'>2518</td><td>11,6&times;</td><td>197–245</td><td>2185–2722</td></tr>
+<tr><td>Итерация 2б (время жизни кэша 600 с)</td><td class='lang-py'>284</td><td class='lang-go'>&ge;4330</td><td>&ge;15,2&times;</td><td>207–322</td><td>4049–4342</td></tr>
+</table>
+<p style="font-size:.92em;color:#555">* На итерации 0 предельная ёмкость по критериям SLO не определена — среднее время выполнения запроса без индекса (около 649 мс) превышает допустимый порог 95-го процентиля при любой минимальной нагрузке. Вместо этого приведена пропускная способность до возникновения отказов (максимальная частота запросов в секунду при доле ошибок менее 1 %). По времени отклика обе реализации на итерации 0 практически идентичны, поскольку простаивают в ожидании ответа СУБД. Различие проявляется лишь в устойчивости к перегрузкам и стабильно возрастает по мере устранения узких мест: преимущество Go перед Python по шагам оптимизации составляет соответственно ~1,5, 8,1, 11,6 и &ge;15,2.</p>
+<p>Метрики производительности при работе на уровне предельной ёмкости (медианные значения по результатам четырех запусков). «Загрузка CPU (сервис)» отражает использование процессорного ядра, выделенного контейнеру приложения. «Память (сервис)» — объём оперативной памяти, потребляемый контейнером приложения (при лимите в 512 МБ). Показатели «Доля попаданий в кэш» и «Активные пользователи» применимы исключительно к конфигурациям итерации 2, содержащим слой кэширования.</p>
+<table><tr><th>Конфигурация</th><th>Язык</th><th>p95 времени<br>отклика, мс</th><th>p99 времени<br>отклика, мс</th><th>Загрузка CPU<br>(сервис), %</th><th>Память<br>(сервис), МБ</th><th>Доля попаданий<br>в кэш, %</th><th>Активные<br>пользователи</th></tr>
+<tr><td>Итерация 1</td><td>Python</td><td>320</td><td>594</td><td>84,5</td><td>245</td><td>—</td><td>—</td></tr>
+<tr><td>Итерация 1</td><td>Go</td><td>221</td><td>342</td><td>97,1</td><td>231</td><td>—</td><td>—</td></tr>
+<tr><td>Итерация 2а (время жизни кэша 60 с)</td><td>Python</td><td>345</td><td>675</td><td>86,9</td><td>248</td><td>6,0</td><td>9418</td></tr>
+<tr><td>Итерация 2а (время жизни кэша 60 с)</td><td>Go</td><td>221</td><td>369</td><td>96,8</td><td>300</td><td>35,3</td><td>54403</td></tr>
+<tr><td>Итерация 2б (время жизни кэша 600 с)</td><td>Python</td><td>385</td><td>786</td><td>91,3</td><td>248</td><td>19,6</td><td>16590</td></tr>
+<tr><td>Итерация 2б (время жизни кэша 600 с)</td><td>Go</td><td>85</td><td>197</td><td>92,5</td><td>346</td><td>87,2</td><td>73036</td></tr>
+</table>
+<p>Потребление ресурсов инфраструктуры при максимальной нагрузке (медианные значения по четырем запускам) для контейнеров СУБД PostgreSQL, кэша Redis и всей виртуальной машины. Параметр «CPU Steal» отображает долю времени, в течение которого гипервизор не предоставлял процессорное время виртуальной машине из-за загруженности физического сервера (подробнее в разделе 2).</p>
+<table><tr><th>Конфигурация</th><th>Язык</th><th>CPU СУБД, %</th><th>RAM СУБД, МБ</th><th>CPU Redis, %</th><th>CPU хоста, %</th><th>RAM хоста, МБ</th><th>CPU Steal, %</th></tr>
+<tr><td>Итерация 1</td><td>Python</td><td>22</td><td>381</td><td>—</td><td>15</td><td>1851</td><td>3,8</td></tr>
+<tr><td>Итерация 1</td><td>Go</td><td>97</td><td>169</td><td>—</td><td>31</td><td>2996</td><td>6,7</td></tr>
+<tr><td>Итерация 2а (время жизни кэша 60 с)</td><td>Python</td><td>20</td><td>190</td><td>3</td><td>15</td><td>1840</td><td>3,3</td></tr>
+<tr><td>Итерация 2а (время жизни кэша 60 с)</td><td>Go</td><td>82</td><td>170</td><td>12</td><td>33</td><td>3666</td><td>6,5</td></tr>
+<tr><td>Итерация 2б (время жизни кэша 600 с)</td><td>Python</td><td>19</td><td>189</td><td>3</td><td>15</td><td>1855</td><td>3,3</td></tr>
+<tr><td>Итерация 2б (время жизни кэша 600 с)</td><td>Go</td><td>67</td><td>170</td><td>13</td><td>38</td><td>4349</td><td>8,3</td></tr>
+</table>
+<h2>2. Оценка воспроизводимости результатов и влияние шума окружения</h2>
+<div class="flames"><div><img src="assets/repeatability.png" alt="Воспроизводимость результатов"><p>На графике представлено отношение предельной производительности каждого из четырех запусков к медианному значению соответствующей конфигурации. Основная часть результатов находится в пределах допустимого отклонения ±15%. Отдельные запуски (например, первый, в котором зарегистрирован пик CPU Steal Time) демонстрируют отклонение до ±25%.</p></div>
+<div><img src="assets/steal.png" alt="Производительность и CPU Steal Time"><p>Показатель CPU Steal Time отражает долю процессорного времени, недополученного виртуальной машиной из-за конкуренции на гипервизоре. Наблюдается выраженная обратная зависимость: увеличение CPU Steal ведет к пропорциональному снижению производительности. Точки ложатся строго вдоль линии тренда. Результаты Go на итерации 2б (контурные точки) исключены из расчета тренда, так как их производительность лимитировалась возможностями генератора k6, а не ресурсами сервера.</p></div>
+</div>
+<p class="note">Поскольку обе реализации тестировались на одном физическом сервере последовательно, уровень CPU Steal в различных запусках варьируется. В ходе тестирования Go данный показатель оказался выше (ввиду более высокой пропускной способности Go создает повышенную нагрузку на дисковую и сетевую подсистемы хоста), что могло незначительно снизить максимальные показатели Go. Несмотря на это, зафиксированное соотношение производительности остается устойчивым, поскольку разрыв в эффективности (порядка 8 раз) многократно превышает погрешность, вызванную колебаниями CPU Steal (±25%). В частности, для итерации 1 во всех четырех запусках преимущество Go перед Python сохраняется в узком диапазоне (от 7,7 до 8,8 при медиане 8,1). Повышенный уровень CPU Steal при работе Go позволяет считать полученную оценку соотношения производительности консервативной (нижней) оценкой.</p>
+<h2>3. Профилирование и анализ узких мест по шагам оптимизации</h2>
+<p>Для каждого этапа приведен профиль времени выполнения приложения (диаграмма Flame Graph) и статистика запросов к СУБД (показатели pg_stat_statements сбрасываются перед каждым нагрузочным тестированием). Данные профилирования служат обоснованием для перехода к следующему шагу.</p>
+<h3>Итерация 0 — базовое решение</h3><p>Пул из 5 соединений, индексы и кэширование отсутствуют. На основе анализа профиля установлено, что большую часть времени занимает ожидание ответа СУБД PostgreSQL (выполняется последовательное сканирование таблиц). Предельная ёмкость стремится к нулю — заданные пороги качества обслуживания нарушаются при минимальной интенсивности запросов. Профиль CPU для Go при этом практически пуст (загрузка ядра около 0,3%), так как сервис простаивает в ожидании СУБД. Это подтверждает, что на начальном этапе главным узким местом является база данных, а не язык разработки. Следующий шаг (итерация 1) — создание индексов и переход на асинхронное взаимодействие.</p>
+<h4>Python (профилировщик py-spy) — интерактивный профиль Flame Graph (поддерживает масштабирование при клике)</h4><div class="flamebox"><object data="assets/flame_0_python.svg" type="image/svg+xml" width="100%"></object></div>
+<h4>Go (профилировщик pprof) — интерактивный профиль Flame Graph (поддерживает масштабирование при клике)</h4><div class="flamebox"><object data="assets/flame_0_go.svg" type="image/svg+xml" width="100%"></object></div>
+<p><b>Распределение процессорного времени в СУБД по типам запросов:</b></p>
+<p>Профиль запросов при нагрузке на реализацию Python:</p><table><tr><th>Время, мс</th><th>Вызовов</th><th>Сред., мс</th><th>Доля</th><th class="qcell">Запрос</th></tr><tr><td>13391.6</td><td>24</td><td>557.981</td><td>96.6%</td><td class="qcell">SELECT movie_id, rating FROM ratings WHERE user_id = ? — формирование персональных рекомендаций</td></tr><tr class="hi"><td>457.9</td><td>16</td><td>28.617</td><td>3.3%</td><td class="qcell">SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count &gt; ? ORDER BY avg_ratin — получение списка популярных фильмов</td></tr><tr><td>5.6</td><td>47</td><td>0.119</td><td>0.0%</td><td class="qcell">SELECT movie_id, title FROM movies WHERE movie_id = ANY(ARRAY[?,?,$3,$4,$5,$6])</td></tr><tr><td>1.4</td><td>8</td><td>0.173</td><td>0.0%</td><td class="qcell">SELECT movie_id, title FROM movies WHERE movie_id = ANY(ARRAY[?,?,$3,$4,$5,$6,$7,$8,$9,$</td></tr><tr><td>0.2</td><td>95</td><td>0.002</td><td>0.0%</td><td class="qcell">BEGIN</td></tr><tr><td>0.1</td><td>95</td><td>0.002</td><td>0.0%</td><td class="qcell">ROLLBACK</td></tr></table>
+<p>Профиль запросов при нагрузке на реализацию Go:</p><table><tr><th>Время, мс</th><th>Вызовов</th><th>Сред., мс</th><th>Доля</th><th class="qcell">Запрос</th></tr><tr><td>11422.9</td><td>20</td><td>571.145</td><td>96.4%</td><td class="qcell">SELECT movie_id, rating FROM ratings WHERE user_id = ? — формирование персональных рекомендаций</td></tr><tr class="hi"><td>425.1</td><td>15</td><td>28.342</td><td>3.6%</td><td class="qcell">SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count &gt; ? ORDER BY avg_ratin — получение списка популярных фильмов</td></tr><tr><td>7.0</td><td>56</td><td>0.125</td><td>0.1%</td><td class="qcell">SELECT movie_id, title FROM movies WHERE movie_id = ANY(?)</td></tr></table>
+<details><summary>Планы выполнения SQL-запросов (EXPLAIN ANALYZE)</summary><pre><b>План выполнения запроса (получение персональных рекомендаций):</b>
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
+ Gather  (cost=1000.00..339626.73 rows=829 width=16) (actual time=542.414..548.720 rows=61 loops=1)
+   Workers Planned: 2
+   Workers Launched: 2
+   Buffers: shared hit=1920 read=206415
+   -&gt;  Parallel Seq Scan on ratings  (cost=0.00..338543.83 rows=345 width=16) (actual time=513.887..525.016 rows=20 loops=3)
+         Filter: (user_id = 100)
+         Rows Removed by Filter: 8333345
+         Buffers: shared hit=1920 read=206415
+ Planning:
+   Buffers: shared hit=85
+ Planning Time: 0.285 ms
+ JIT:
+   Functions: 12
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 0.748 ms, Inlining 0.000 ms, Optimization 0.756 ms, Emission 9.872 ms, Total 11.375 ms
+ Execution Time: 567.469 ms
+(16 rows)
+
+
+
+<b>План выполнения запроса (получение списка популярных фильмов):</b>
+                                                              QUERY PLAN                                                               
+---------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=5260.03..5269.34 rows=81 width=43) (actual time=13.927..16.454 rows=81 loops=1)
+   Buffers: shared hit=2216
+   -&gt;  Gather Merge  (cost=5260.03..9251.91 rows=34712 width=43) (actual time=13.925..16.431 rows=81 loops=1)
+         Workers Planned: 1
+         Workers Launched: 1
+         Buffers: shared hit=2216
+         -&gt;  Sort  (cost=4260.02..4346.80 rows=34712 width=43) (actual time=11.663..11.703 rows=76 loops=2)
+               Sort Key: ((avg_rating * ln(((ratings_count + 1))::double precision))) DESC
+               Sort Method: top-N heapsort  Memory: 36kB
+               Buffers: shared hit=2216
+               Worker 0:  Sort Method: top-N heapsort  Memory: 36kB
+               -&gt;  Parallel Seq Scan on movies  (cost=0.00..2986.11 rows=34712 width=43) (actual time=0.096..7.211 rows=29524 loops=2)
+                     Filter: (ratings_count &gt; 0)
+                     Rows Removed by Filter: 1688
+                     Buffers: shared hit=2180
+ Planning:
+   Buffers: shared hit=138
+ Planning Time: 0.604 ms
+ Execution Time: 16.548 ms
+(19 rows)
+
+</pre></details>
+<h3>Итерация 1 — индексы и асинхронное взаимодействие</h3><p>Созданы два индекса (по идентификатору пользователя и по популярности фильмов), размер пула соединений увеличен до 10, а реализация на Python переведена на асинхронный драйвер базы данных. В результате база данных перестала быть узким местом; в профилях выполнения сервисов основную долю времени начинают занимать накладные расходы самого веб-фреймворка и интерпретатора. Следующий шаг (итерация 2) — кэширование результатов запросов.</p>
+<h4>Python (профилировщик py-spy) — интерактивный профиль Flame Graph (поддерживает масштабирование при клике)</h4><div class="flamebox"><object data="assets/flame_1_python.svg" type="image/svg+xml" width="100%"></object></div>
+<h4>Go (профилировщик pprof) — интерактивный профиль Flame Graph (поддерживает масштабирование при клике)</h4><div class="flamebox"><object data="assets/flame_1_go.svg" type="image/svg+xml" width="100%"></object></div>
+<p><b>Распределение процессорного времени в СУБД по типам запросов:</b></p>
+<p>Профиль запросов при нагрузке на реализацию Python:</p><table><tr><th>Время, мс</th><th>Вызовов</th><th>Сред., мс</th><th>Доля</th><th class="qcell">Запрос</th></tr><tr class="hi"><td>1437.2</td><td>1861</td><td>0.772</td><td>50.4%</td><td class="qcell">SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count &gt; ? ORDER BY avg_ratin — получение списка популярных фильмов</td></tr><tr><td>877.5</td><td>2659</td><td>0.330</td><td>30.7%</td><td class="qcell">SELECT movie_id, rating FROM ratings WHERE user_id = ? — формирование персональных рекомендаций</td></tr><tr><td>394.0</td><td>5812</td><td>0.068</td><td>13.8%</td><td class="qcell">SELECT movie_id, title FROM movies WHERE movie_id = ANY(?::int[])</td></tr><tr><td>78.5</td><td>10332</td><td>0.008</td><td>2.7%</td><td class="qcell">RESET ALL</td></tr><tr><td>47.5</td><td>10332</td><td>0.005</td><td>1.7%</td><td class="qcell">SELECT pg_advisory_unlock_all()</td></tr><tr><td>9.7</td><td>10332</td><td>0.001</td><td>0.3%</td><td class="qcell">CLOSE ALL</td></tr><tr><td>6.5</td><td>10332</td><td>0.001</td><td>0.2%</td><td class="qcell">UNLISTEN *</td></tr><tr><td>2.9</td><td>10</td><td>0.294</td><td>0.1%</td><td class="qcell">WITH RECURSIVE typeinfo_tree( oid, ns, name, kind, basetype, elemtype, elemdelim, range_su</td></tr></table>
+<p>Профиль запросов при нагрузке на реализацию Go:</p><table><tr><th>Время, мс</th><th>Вызовов</th><th>Сред., мс</th><th>Доля</th><th class="qcell">Запрос</th></tr><tr class="hi"><td>8359.6</td><td>14852</td><td>0.563</td><td>53.6%</td><td class="qcell">SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count &gt; ? ORDER BY avg_ratin — получение списка популярных фильмов</td></tr><tr><td>5381.6</td><td>21179</td><td>0.254</td><td>34.5%</td><td class="qcell">SELECT movie_id, rating FROM ratings WHERE user_id = ? — формирование персональных рекомендаций</td></tr><tr><td>1856.3</td><td>47244</td><td>0.039</td><td>11.9%</td><td class="qcell">SELECT movie_id, title FROM movies WHERE movie_id = ANY(?)</td></tr></table>
+<details><summary>Планы выполнения SQL-запросов (EXPLAIN ANALYZE)</summary><pre><b>План выполнения запроса (получение персональных рекомендаций):</b>
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_ratings_user_id on ratings  (cost=0.44..28.95 rows=829 width=16) (actual time=0.079..0.086 rows=61 loops=1)
+   Index Cond: (user_id = 100)
+   Buffers: shared hit=5 read=2
+ Planning:
+   Buffers: shared hit=82 read=16
+ Planning Time: 0.636 ms
+ Execution Time: 0.148 ms
+(7 rows)
+
+
+
+<b>План выполнения запроса (получение списка популярных фильмов):</b>
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.29..15.18 rows=81 width=43) (actual time=0.049..0.219 rows=81 loops=1)
+   Buffers: shared hit=76
+   -&gt;  Index Scan using idx_movies_popularity on movies  (cost=0.29..10851.54 rows=59010 width=43) (actual time=0.048..0.211 rows=81 loops=1)
+         Buffers: shared hit=76
+ Planning:
+   Buffers: shared hit=148 read=10
+ Planning Time: 0.767 ms
+ Execution Time: 0.277 ms
+(8 rows)
+
+</pre></details>
+<h3>Итерация 2 — кэширование (Redis)</h3><p>Интегрировано кэширование в Redis (проанализировано время жизни кэша 60 и 600 с). При наличии данных в кэше обработка запросов происходит без обращений к СУБД и выполнения бизнес-логики. Производительность в этой конфигурации сдерживается исключительно накладными расходами веб-фреймворка на обработку HTTP-протокола.</p>
+<h4>Python (профилировщик py-spy) — интерактивный профиль Flame Graph (поддерживает масштабирование при клике)</h4><div class="flamebox"><object data="assets/flame_2_python.svg" type="image/svg+xml" width="100%"></object></div>
+<h4>Go (профилировщик pprof) — интерактивный профиль Flame Graph (поддерживает масштабирование при клике)</h4><div class="flamebox"><object data="assets/flame_2_go.svg" type="image/svg+xml" width="100%"></object></div>
+<p><b>Распределение процессорного времени в СУБД по типам запросов:</b></p>
+<p>Профиль запросов при нагрузке на реализацию Python:</p><table><tr><th>Время, мс</th><th>Вызовов</th><th>Сред., мс</th><th>Доля</th><th class="qcell">Запрос</th></tr><tr class="hi"><td>1434.0</td><td>2372</td><td>0.605</td><td>47.2%</td><td class="qcell">SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count &gt; ? ORDER BY avg_ratin — получение списка популярных фильмов</td></tr><tr><td>974.6</td><td>3325</td><td>0.293</td><td>32.1%</td><td class="qcell">SELECT movie_id, rating FROM ratings WHERE user_id = ? — формирование персональных рекомендаций</td></tr><tr><td>455.1</td><td>7429</td><td>0.061</td><td>15.0%</td><td class="qcell">SELECT movie_id, title FROM movies WHERE movie_id = ANY(?::int[])</td></tr><tr><td>91.4</td><td>13126</td><td>0.007</td><td>3.0%</td><td class="qcell">RESET ALL</td></tr><tr><td>60.2</td><td>13126</td><td>0.005</td><td>2.0%</td><td class="qcell">SELECT pg_advisory_unlock_all()</td></tr><tr><td>10.8</td><td>13126</td><td>0.001</td><td>0.4%</td><td class="qcell">CLOSE ALL</td></tr><tr><td>7.5</td><td>13126</td><td>0.001</td><td>0.2%</td><td class="qcell">UNLISTEN *</td></tr><tr><td>3.2</td><td>10</td><td>0.316</td><td>0.1%</td><td class="qcell">WITH RECURSIVE typeinfo_tree( oid, ns, name, kind, basetype, elemtype, elemdelim, range_su</td></tr></table>
+<p>Профиль запросов при нагрузке на реализацию Go:</p><table><tr><th>Время, мс</th><th>Вызовов</th><th>Сред., мс</th><th>Доля</th><th class="qcell">Запрос</th></tr><tr class="hi"><td>8041.1</td><td>19227</td><td>0.418</td><td>48.0%</td><td class="qcell">SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count &gt; ? ORDER BY avg_ratin — получение списка популярных фильмов</td></tr><tr><td>5726.4</td><td>28403</td><td>0.202</td><td>34.2%</td><td class="qcell">SELECT movie_id, rating FROM ratings WHERE user_id = ? — формирование персональных рекомендаций</td></tr><tr><td>2969.4</td><td>78007</td><td>0.038</td><td>17.7%</td><td class="qcell">SELECT movie_id, title FROM movies WHERE movie_id = ANY(?)</td></tr></table>
+<details><summary>Планы выполнения SQL-запросов (EXPLAIN ANALYZE)</summary><pre><b>План выполнения запроса (получение персональных рекомендаций):</b>
+                                                            QUERY PLAN                                                            
+----------------------------------------------------------------------------------------------------------------------------------
+ Index Scan using idx_ratings_user_id on ratings  (cost=0.44..28.95 rows=829 width=16) (actual time=0.051..0.058 rows=61 loops=1)
+   Index Cond: (user_id = 100)
+   Buffers: shared hit=5 read=2
+ Planning:
+   Buffers: shared hit=82 read=16
+ Planning Time: 0.580 ms
+ Execution Time: 0.117 ms
+(7 rows)
+
+
+
+<b>План выполнения запроса (получение списка популярных фильмов):</b>
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.29..15.18 rows=81 width=43) (actual time=0.025..0.142 rows=81 loops=1)
+   Buffers: shared hit=76
+   -&gt;  Index Scan using idx_movies_popularity on movies  (cost=0.29..10851.54 rows=59010 width=43) (actual time=0.023..0.135 rows=81 loops=1)
+         Buffers: shared hit=76
+ Planning:
+   Buffers: shared hit=148 read=10
+ Planning Time: 0.596 ms
+ Execution Time: 0.172 ms
+(8 rows)
+
+</pre></details>
+<h2>4. Краткое описание методики тестирования</h2><ul>
+<li>Предельная ёмкость определяется как максимальная интенсивность запросов (RPS), при которой выполняются критерии SLO: 95-й процентиль времени отклика — менее 500 мс, 99-й процентиль — менее 1000 мс, доля ошибок (включая превышение тайм-аутов) — менее 1%.</li>
+<li>Применяется открытая модель нагрузки: генератор k6 линейно наращивает интенсивность подачи запросов независимо от скорости ответа сервиса. Количество запросов в секунду и доля ошибок фиксируются k6, а процентили времени отклика рассчитываются на основе серверных метрик.</li>
+<li>Каждая конфигурация испытывается в течение четырех независимых запусков на изолированном стенде. В качестве результирующего показателя используется медиана, а диапазон (минимум/максимум) служит мерой стабильности результатов.</li>
+<li>Профилирование выполняется при стабилизированной нагрузке на уровне около 50% от предельной ёмкости (в режиме отсутствия ошибок). Статистика запросов СУБД сбрасывается перед началом каждого нагрузочного теста.</li>
+<li>Конфигурация ресурсов и лимиты контейнеров: сервис приложений — 1 ядро vCPU, 512 МБ RAM (оба сервиса запущены в однопоточном режиме, без многоядерного распараллеливания); база данных PostgreSQL — 4 ядра vCPU, 8 ГБ RAM; кэш Redis — 1 ядро vCPU, 256 МБ RAM.</li>
+</ul>
+</body></html>

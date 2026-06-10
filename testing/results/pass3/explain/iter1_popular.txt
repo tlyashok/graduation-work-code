@@ -1,0 +1,12 @@
+                                                                  QUERY PLAN                                                                  
+----------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.29..15.18 rows=81 width=43) (actual time=0.052..0.260 rows=81 loops=1)
+   Buffers: shared hit=76
+   ->  Index Scan using idx_movies_popularity on movies  (cost=0.29..10851.54 rows=59010 width=43) (actual time=0.051..0.252 rows=81 loops=1)
+         Buffers: shared hit=76
+ Planning:
+   Buffers: shared hit=147 read=11
+ Planning Time: 0.786 ms
+ Execution Time: 0.320 ms
+(8 rows)
+

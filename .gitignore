@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# Go
+vendor/
+
+# Environment
+.env
+
+# Node
+node_modules/
+
+# Data
+*.csv
+*.dat
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing data (large files)
+testing/data/
+testing/logs/

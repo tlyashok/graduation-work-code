@@ -1,0 +1,126 @@
+# Общая инфраструктура: БД, веб-система, nginx, мониторинг, инициализация
+
+name: compose
+
+services:
+  db:
+    image: postgres:16
+    # pg_stat_statements - для анализа узких мест БД (вклад /popular во время БД)
+    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all
+    env_file: ../.env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../../../shared/db/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    ports:
+      - "${PORT_DB}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "${DB_CPUS}"
+          memory: ${DB_MEMORY}
+
+  # Кэш рекомендаций (итерация 2, §2.5). Конфигурация - по умолчанию;
+  # TTL ключей задаётся приложением (CACHE_TTL_SECONDS).
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${PORT_REDIS:-6379}:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  init:
+    image: python:3.12-slim
+    profiles: [init]
+    working_dir: /scripts
+    env_file: ../.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../../../shared/db:/scripts
+      - movielens-data:${MOVIELENS_DATA_DIR}
+    command: >
+      bash -c "pip install psycopg2-binary numpy scipy scikit-learn &&
+               python seed_movielens.py &&
+               python compute_similarity.py"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web-app:
+    build: ../../../shared/web-app
+    env_file: ../.env
+    volumes:
+      - ../../../shared/web-app/app:/app/app
+      - ../../../shared/web-app/static:/app/static
+    ports:
+      - "${PORT_WEB}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ../config/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../../../testing/logs/nginx:/var/log/nginx
+    ports:
+      - "${PORT_NGINX}:80"
+    depends_on:
+      - web-app
+
+  prometheus:
+    image: prom/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-remote-write-receiver   # приём метрик k6 (клиентские p95/p99/ошибки)
+    volumes:
+      - ../config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "${PORT_PROMETHEUS}:9090"
+    depends_on:
+      - cadvisor
+      - node-exporter
+
+  # Метрики контейнеров (CPU/RAM по каждому сервису)
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor
+    privileged: true
+    command:
+      - --docker_only=true
+      - --store_container_labels=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /run/containerd/containerd.sock:/run/containerd/containerd.sock:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "${PORT_CADVISOR}:8080"
+
+  # Метрики всей машины (CPU/RAM хоста; pid: host даёт доступ к процессам хоста)
+  node-exporter:
+    image: prom/node-exporter
+    pid: host
+    command:
+      - --path.rootfs=/host
+    volumes:
+      - /:/host:ro,rslave
+    ports:
+      - "${PORT_NODE_EXPORTER:-9100}:9100"
+
+volumes:
+  pgdata:
+  movielens-data:

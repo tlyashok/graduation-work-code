@@ -1,0 +1,9 @@
+ total_ms | calls | mean_ms | pct  |                                           query                                            
+----------+-------+---------+------+--------------------------------------------------------------------------------------------
+   8041.1 | 19227 |   0.418 | 48.0 | SELECT movie_id, title, avg_rating FROM movies WHERE ratings_count > $2 ORDER BY avg_ratin
+   5726.4 | 28403 |   0.202 | 34.2 | SELECT movie_id, rating FROM ratings WHERE user_id = $1
+   2969.4 | 78007 |   0.038 | 17.7 | SELECT movie_id, title FROM movies WHERE movie_id = ANY($1)
+      0.3 |     1 |   0.256 |  0.0 | CREATE EXTENSION IF NOT EXISTS pg_stat_statements
+      0.1 |     1 |   0.123 |  0.0 | SELECT pg_stat_statements_reset()
+(5 rows)
+

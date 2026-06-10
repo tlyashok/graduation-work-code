@@ -1,0 +1,20 @@
+                                                         QUERY PLAN                                                          
+-----------------------------------------------------------------------------------------------------------------------------
+ Gather  (cost=1000.00..339626.73 rows=829 width=16) (actual time=233.413..600.858 rows=61 loops=1)
+   Workers Planned: 2
+   Workers Launched: 2
+   Buffers: shared hit=13859 read=194476
+   ->  Parallel Seq Scan on ratings  (cost=0.00..338543.83 rows=345 width=16) (actual time=450.190..569.574 rows=20 loops=3)
+         Filter: (user_id = 100)
+         Rows Removed by Filter: 8333345
+         Buffers: shared hit=13859 read=194476
+ Planning:
+   Buffers: shared hit=73 read=12
+ Planning Time: 0.463 ms
+ JIT:
+   Functions: 12
+   Options: Inlining false, Optimization false, Expressions true, Deforming true
+   Timing: Generation 0.980 ms, Inlining 0.000 ms, Optimization 0.858 ms, Emission 11.838 ms, Total 13.676 ms
+ Execution Time: 622.800 ms
+(16 rows)
+

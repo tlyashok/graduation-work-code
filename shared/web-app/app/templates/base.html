@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}FilmRec{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#6C63FF',
+            secondary: '#FF6584',
+            accent: '#00BFA6',
+          }
+        }
+      }
+    }
+    </script>
+    <style>
+    input[type="checkbox"] { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; border: 2px solid #E0E0E0; border-radius: 4px; cursor: pointer; flex-shrink: 0; }
+    input[type="checkbox"]:checked { background: #6C63FF; border-color: #6C63FF; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' fill='white' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z'/%3E%3C/svg%3E"); background-size: 100%; }
+    </style>
+</head>
+<body class="bg-[#FAFAFA] text-[#1A1A2E] min-h-screen flex flex-col">
+    <nav class="sticky top-0 z-50 bg-white border-b border-[#E0E0E0] shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+            <a href="/" class="text-xl font-bold text-primary whitespace-nowrap">FilmRec</a>
+            <form action="/catalog" method="get" class="flex-1 max-w-lg mx-4">
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-[#888]"></span>
+                    <input type="text" name="q" placeholder="Поиск фильмов..."
+                           value="{{ q or '' }}"
+                           class="w-full pl-4 pr-4 py-2 bg-gray-100 rounded-full border border-transparent focus:border-primary focus:bg-white focus:outline-none transition">
+                </div>
+            </form>
+            <div class="flex items-center gap-3">
+                <a href="/" class="text-sm text-[#1A1A2E] hover:text-primary transition">Главная</a>
+                <a href="/catalog" class="text-sm text-[#1A1A2E] hover:text-primary transition">Каталог</a>
+                {% if user and user.role in ('moderator', 'admin') %}
+                    <a href="/moderator/" class="text-sm text-[#1A1A2E] hover:text-primary transition">Модерация</a>
+                {% endif %}
+                {% if user and user.role == 'admin' %}
+                    <a href="/admin/" class="text-sm text-[#1A1A2E] hover:text-primary transition">Администрирование</a>
+                {% endif %}
+                {% if user %}
+                    <a href="/profile?tab=favorites" class="text-sm text-[#1A1A2E] hover:text-secondary transition">Избранное</a>
+                    <div class="relative" x-data="{ open: false }">
+                        <button onclick="this.parentElement.querySelector('.dropdown').classList.toggle('hidden')" class="inline-flex items-center px-4 py-1.5 bg-primary text-white text-sm font-medium rounded-full hover:bg-primary/90 transition">{{ user.username }}</button>
+                        <div class="dropdown hidden absolute right-0 mt-2 w-40 bg-white rounded-lg shadow-lg border border-[#E0E0E0] py-1 z-50">
+                            <a href="/profile" class="block px-4 py-2 text-sm text-[#1A1A2E] hover:bg-gray-100">Профиль</a>
+                            <a href="/logout" class="block px-4 py-2 text-sm text-secondary hover:bg-gray-100">Выйти</a>
+                        </div>
+                    </div>
+                {% else %}
+                    <a href="/login" class="inline-flex items-center px-4 py-1.5 bg-primary text-white text-sm font-medium rounded-full hover:bg-primary/90 transition">Войти</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="border-t border-[#E0E0E0] bg-white">
+        <div class="max-w-7xl mx-auto px-4 py-6 text-center text-[#888] text-sm">
+            <p>&copy; 2026 FilmRec</p>
+        </div>
+    </footer>
+</body>
+</html>

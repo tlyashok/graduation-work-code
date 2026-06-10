@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Главная — FilmRec{% endblock %}
+{% block content %}
+
+{% macro movie_card(movie, show_match=false, match_pct=none) %}
+<a href="/movie/{{ movie.movie_id if movie.movie_id is defined else movie['movie_id'] }}" class="flex-shrink-0 w-48 rounded-xl shadow-md overflow-hidden bg-white hover:scale-105 transition-transform duration-200 group">
+    <div class="relative">
+        {% set poster = movie.poster_path if movie.poster_path is defined else movie.get('poster_path') %}
+        {% set title = movie.title if movie.title is defined else movie.get('title', '') %}
+        {% if poster %}
+            <img src="https://image.tmdb.org/t/p/w300{{ poster }}" alt="{{ title }}" class="w-full h-64 object-cover">
+        {% else %}
+            <div class="w-full h-64 bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-4xl font-bold">{{ title[:1] }}</div>
+        {% endif %}
+        {% if show_match and match_pct is not none %}
+            <span class="absolute top-2 right-2 bg-accent text-white text-xs font-bold px-2 py-1 rounded-full">{{ match_pct }}%</span>
+        {% endif %}
+    </div>
+    <div class="p-3">
+        <div class="text-sm font-semibold truncate">{{ title }}</div>
+        {% set year = movie.year if movie.year is defined else movie.get('year') %}
+        {% if year %}
+            <div class="text-xs text-[#888] mt-0.5">{{ year }}</div>
+        {% endif %}
+        <div class="text-amber-500 text-sm mt-1">
+            {% set avg = movie.avg_rating if movie.avg_rating is defined else (movie.predicted_rating if movie.predicted_rating is defined else movie.get('predicted_rating', 0)) %}
+            {% set stars = avg|int %}
+            {% for i in range(5) %}{% if i < stars %}★{% else %}☆{% endif %}{% endfor %}
+            <span class="text-[#888] text-xs ml-1">{{ "%.1f"|format(avg) }}</span>
+        </div>
+    </div>
+</a>
+{% endmacro %}
+
+{% if recommendations %}
+<section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">Рекомендации для вас</h2>
+    <div class="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+        {% for rec in recommendations %}
+            {{ movie_card(rec, show_match=true, match_pct=(rec.predicted_rating / 5 * 100)|int) }}
+        {% endfor %}
+    </div>
+</section>
+{% endif %}
+
+<section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">Популярные фильмы</h2>
+    <div class="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+        {% for movie in popular %}
+            {{ movie_card(movie) }}
+        {% endfor %}
+    </div>
+</section>
+
+<section class="mb-10">
+    <h2 class="text-2xl font-bold mb-4">Лучшие по рейтингу</h2>
+    <div class="flex gap-4 overflow-x-auto pb-4 scrollbar-thin">
+        {% for movie in top_rated %}
+            {{ movie_card(movie) }}
+        {% endfor %}
+    </div>
+</section>
+
+{% endblock %}

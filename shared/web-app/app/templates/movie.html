@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}{{ movie.title }} — FilmRec{% endblock %}
+{% block content %}
+<div class="space-y-10">
+    <!-- Шапка карточки фильма -->
+    <div class="flex flex-col md:flex-row gap-8">
+        {% if movie.poster_path %}
+            <img src="https://image.tmdb.org/t/p/w500{{ movie.poster_path }}" alt="{{ movie.title }}"
+                 class="w-72 flex-shrink-0 rounded-xl shadow-lg object-cover">
+        {% else %}
+            <div class="w-72 h-[430px] flex-shrink-0 rounded-xl shadow-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-6xl font-bold">{{ movie.title[:1] }}</div>
+        {% endif %}
+
+        <div class="flex-1 space-y-4">
+            <h1 class="text-3xl font-bold">{{ movie.title }}</h1>
+            <p class="text-[#888]">{{ movie.year or '' }} {% for g in genres %}<span class="mx-1">/</span> {{ g.name_ru or g.name }} {% endfor %}</p>
+
+            <div class="flex items-center gap-3">
+                <span class="text-amber-500 text-2xl">
+                    {% set stars = movie.avg_rating|int %}
+                    {% for i in range(5) %}{% if i < stars %}★{% else %}☆{% endif %}{% endfor %}
+                </span>
+                <span class="text-2xl font-bold">{{ "%.1f"|format(movie.avg_rating) }}</span>
+                <span class="text-[#888] text-sm">({{ movie.ratings_count }} оценок)</span>
+            </div>
+
+            {% if user %}
+            <div class="flex flex-wrap items-center gap-4 pt-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-sm text-[#888]">Ваша оценка:</span>
+                    <form method="post" action="/rate/{{ movie.movie_id }}" class="flex gap-0.5">
+                        {% for i in range(1, 6) %}
+                        <button type="submit" name="rating" value="{{ i }}"
+                                class="text-2xl transition hover:scale-125 {% if user_rating and user_rating >= i %}text-amber-500{% else %}text-gray-300 hover:text-amber-400{% endif %}">★</button>
+                        {% endfor %}
+                    </form>
+                </div>
+                <form method="post" action="/favorite/{{ movie.movie_id }}">
+                    <button type="submit"
+                            class="px-4 py-2 border border-[#E0E0E0] rounded-lg text-sm font-medium hover:bg-gray-50 transition {% if is_favorite %}text-secondary border-secondary{% endif %}">
+                        {% if is_favorite %}В избранном{% else %}В избранное{% endif %}
+                    </button>
+                </form>
+            </div>
+            {% endif %}
+
+            {% if movie.description %}
+            <p class="text-[#1A1A2E] leading-relaxed pt-2">{{ movie.description }}</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Похожие фильмы -->
+    {% if similar_movies %}
+    <section>
+        <h2 class="text-2xl font-bold mb-4">Похожие фильмы</h2>
+        <div class="flex gap-4 overflow-x-auto pb-4">
+            {% for rec in similar_movies %}
+            <a href="/movie/{{ rec.movie_id }}" class="flex-shrink-0 w-48 rounded-xl shadow-md overflow-hidden bg-white hover:scale-105 transition-transform duration-200">
+                {% if rec.poster_path %}
+                <img src="https://image.tmdb.org/t/p/w300{{ rec.poster_path }}" alt="{{ rec.title }}" class="w-full h-64 object-cover">
+                {% else %}
+                <div class="w-full h-64 bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white text-4xl font-bold">{{ rec.title[:1] }}</div>
+                {% endif %}
+                <div class="p-3">
+                    <div class="text-sm font-semibold truncate">{{ rec.title }}</div>
+                    {% if rec.year %}<div class="text-xs text-[#888]">{{ rec.year }}</div>{% endif %}
+                    <div class="text-accent text-sm mt-1">
+                        {{ "%.0f%%"|format(rec.similarity * 100) }} совпадение
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+</div>
+{% endblock %}
